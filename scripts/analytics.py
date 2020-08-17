@@ -7,6 +7,17 @@ import json
 CFG_FILE = f"{os.environ['HOME']}/.config/cave-logger/config.json"
 OUTDIR = "/tmp/cl"
 
+def initDbConn():
+    # Read config file first
+    with open(CFG_FILE) as c:
+        cfg = json.load(c)
+
+    dbconn = sqlite3.connect(f"{os.environ['HOME']}/{cfg['database']['filename']}")
+    dbconn.row_factory=sqlite3.Row
+
+    return dbconn
+# END
+
 class App():
     def __init__(self):
         self.dbconn = initDbConn()
@@ -38,8 +49,7 @@ class App():
 
         # Flip the data
         data = {
-            'names': [],
-            'names_count': [],
+            'names': [], 'names_count': [],
         }
 
         for row in raw_data:
@@ -50,12 +60,12 @@ class App():
         fig.show()
         
     def analyseClubs(self):
-        
+        print("Analysing Clubs")
         
         cur = self.dbconn.cursor()
         cur.execute("""
         SELECT 
-		people.club AS 'club',
+		DISTINCT(people.club) AS 'club',
                 (
                     SELECT COUNT(1) FROM people p WHERE p.club = people.club
                 ) as 'count'
@@ -65,8 +75,7 @@ class App():
 
         # Flip the data
         data = {
-            'clubs': [],
-            'clubs_count': [],
+            'clubs': [], 'clubs_count': [],
         }
 
         for row in raw_data:
@@ -75,25 +84,44 @@ class App():
             
         fig = px.bar(data, x='clubs', y='clubs_count')
         fig.show()
+
+
+    def analyseCaves(self):
+        print("Analysing Caves")
+
+        cur = self.dbconn.cursor()
+        cur.execute("""
+        SELECT 
+		DISTINCT(locations.name) AS 'cave',
+                (
+                    SELECT COUNT(1) FROM trips t WHERE t.caveid = locations.id
+                ) as 'count'
+	FROM locations
+	ORDER BY cave""")
+        raw_data = cur.fetchall()
+
+        # Flip the data
+        data = {
+            'caves': [], 'caves_count': [],
+        }
+
+        for row in raw_data:
+            data['caves'].append(row['cave'])
+            data['caves_count'].append(row['count'])
+            
+        fig = px.bar(data, x='caves', y='caves_count')
+        fig.show()
+
+    def dbCloseConn():
+        self.dbconn.close()
 # END
 
-def initDbConn():
-    # Read config file first
-    with open(CFG_FILE) as c:
-        cfg = json.load(c)
-
-    dbconn = sqlite3.connect(f"{os.environ['HOME']}/{cfg['database']['filename']}")
-    dbconn.row_factory=sqlite3.Row
-
-    return dbconn
-# END
-
-def dbCloseConn(conn):
-    conn.close()
-# END
 
 
 if __name__ == '__main__':
     app = App()
     app.analyseClubs()
     app.analysePeople()
+    app.analyseCaves()
+
+    app.dbCloseConn()
